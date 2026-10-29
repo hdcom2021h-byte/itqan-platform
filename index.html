@@ -5765,8 +5765,9 @@ ${REPORT_CSS}</style></head><body>${autoPrint ? '' : '<div class="bar"><button o
         if (!dr.length) { toast('القالب يحتاج عنصراً واحداً على الأقل.', 'bad'); break; }
         if (dr.some((i) => !String(i.name).trim())) { toast('يوجد عنصر بلا اسم.', 'bad'); break; }
         if (dr.some((i) => !(Number(i.weight) > 0))) { toast('كل عنصر يحتاج وزناً أكبر من صفر.', 'bad'); break; }
-        await commit((db) => { db.templates[d.role].items = dr.map((i) => ({ ...i, name: i.name.trim(), weight: Number(i.weight) })); db.templates[d.role].updatedAt = nowIso(); }, 'حُفظ القالب. يُطبَّق على الملفات الجديدة فقط.');
-        UI.tplDraft[d.role] = clone(DB.templates[d.role].items); render();
+        const saved = await commit((db) => { db.templates[d.role].items = dr.map((i) => ({ ...i, name: i.name.trim(), weight: Number(i.weight) })); db.templates[d.role].updatedAt = nowIso(); }, 'حُفظ القالب. يُطبَّق على الملفات الجديدة فقط.');
+        // احتفظي بالمسودة عند الفشل حتى يمكن تصحيحها أو إعادة حفظها.
+        if (saved !== false) { UI.tplDraft[d.role] = clone(DB.templates[d.role].items); render(); }
         break;
       }
       case 'ad-save': {
@@ -5862,7 +5863,15 @@ ${REPORT_CSS}</style></head><body>${autoPrint ? '' : '<div class="bar"><button o
       ev.preventDefault();
       if (modalHandler) {
         const btn = ev.target.querySelector('button[type=submit]'); if (btn) btn.disabled = true;
-        Promise.resolve(modalHandler(new FormData(ev.target), ev.target)).then((close) => { if (close) closeModal(); else if (btn) btn.disabled = false; });
+        try {
+          const close = await modalHandler(new FormData(ev.target), ev.target);
+          if (close) closeModal();
+        } catch (error) {
+          console.error('تعذّر حفظ النموذج', error);
+          toast(CLOUD ? C.errMsg(error) : 'تعذّر حفظ النموذج؛ حاولي مرة أخرى.', 'bad');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
       return;
     }
